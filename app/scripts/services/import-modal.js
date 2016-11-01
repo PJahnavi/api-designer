@@ -81,7 +81,7 @@
         $scope.importing = true;
 
         // Attempt to import from a Swagger definition.
-        return swaggerToRAML.convert(mode.value)
+        return swaggerToRAML.url(mode.value)
           .then(function (contents) {
             var filename = extractFileName(mode.value, 'raml');
             return importService.createAndSaveFile($scope.rootDirectory, filename, contents);
@@ -100,12 +100,18 @@
       function importSwaggerZip (mode) {
         $scope.importing = true;
 
-        return swaggerToRAML.zip(mode.value)
-          .then(function (contents) {
+        var importSwaggerPromise;
+        if (importService.isZip(mode.value)) {
+          importSwaggerPromise = swaggerToRAML.zip($scope.rootDirectory, mode.value)
+            .then(function() { $rootScope.$broadcast('event:save-all'); });
+        } else {
+          importSwaggerPromise = swaggerToRAML.file(mode.value).then(function (contents) {
             var filename = extractFileName(mode.value.name, 'raml');
-
             return importService.createAndSaveFile($scope.rootDirectory, filename, contents);
-          })
+          });
+        }
+
+        return importSwaggerPromise
           .then(function () {
             return $modalInstance.close(true);
           })
@@ -129,7 +135,7 @@
           callback: importSwagger
         },
         {
-          name: 'Swagger .zip',
+          name: 'Swagger file',
           type: 'zip',
           callback: importSwaggerZip
         }
@@ -155,7 +161,12 @@
           return;
         }
 
-        return $scope.mode.callback($scope.mode);
+        try {
+          return $scope.mode.callback($scope.mode);
+        } catch (err) {
+          $scope.importing = false;
+          broadcastError(err);
+        }
       };
 
       /**
